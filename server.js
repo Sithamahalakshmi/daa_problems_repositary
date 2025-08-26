@@ -1,4 +1,3 @@
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
@@ -14,43 +13,47 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'src')));
 
-// Create 'data' folder if it doesn't exist
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir);
+// Path to JSON file
+const dataFilePath = path.join(__dirname, 'submissions.json');
+
+// Ensure JSON file exists
+if (!fs.existsSync(dataFilePath)) {
+    fs.writeFileSync(dataFilePath, JSON.stringify([]));
 }
 
-// CSV setup
-const csvFilePath = path.join(dataDir, 'submissions.csv');
-const csvWriter = createCsvWriter({
-    path: csvFilePath,
-    header: [
-        { id: 'name', title: 'Name' },
-        { id: 'id', title: 'ID' },
-        { id: 'problem', title: 'Problem' }
-    ],
-    append: fs.existsSync(csvFilePath)
-});
-
-// Form submission route
+// --- Form submission route ---
 app.post('/submit', (req, res) => {
     const { name, id, problem } = req.body;
     if (!name || !id || !problem) {
         return res.status(400).send('All fields are required!');
     }
 
-    csvWriter.writeRecords([{ name, id, problem }])
-        .then(() => res.send('Submission successful!'))
-        .catch(err => res.status(500).send('Error saving submission'));
+    const submissions = JSON.parse(fs.readFileSync(dataFilePath));
+    submissions.push({ name, id, problem, createdAt: new Date() });
+    fs.writeFileSync(dataFilePath, JSON.stringify(submissions, null, 2));
+
+    res.send('Submission successful!');
 });
 
-// CSV download route
+// --- Download all submissions as CSV ---
 app.get('/download', (req, res) => {
-    if (fs.existsSync(csvFilePath)) {
-        res.download(csvFilePath);
-    } else {
-        res.status(404).send('No submissions yet!');
-    }
+    const submissions = JSON.parse(fs.readFileSync(dataFilePath));
+
+    if (submissions.length === 0) return res.status(404).send('No submissions yet!');
+
+    const csvWriter = createCsvWriter({
+        path: 'submissions.csv',
+        header: [
+            { id: 'name', title: 'Name' },
+            { id: 'id', title: 'ID' },
+            { id: 'problem', title: 'Problem' },
+            { id: 'createdAt', title: 'CreatedAt' }
+        ]
+    });
+
+    csvWriter.writeRecords(submissions)
+        .then(() => res.download('submissions.csv'))
+        .catch(err => res.status(500).send('Error generating CSV'));
 });
 
 app.listen(PORT, () => {
