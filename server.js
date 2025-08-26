@@ -1,9 +1,10 @@
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
+const path = require('path');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,8 +14,14 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'src')));
 
+// Create 'data' folder if it doesn't exist
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir);
+}
+
 // CSV setup
-const csvFilePath = 'submissions.csv';
+const csvFilePath = path.join(dataDir, 'submissions.csv');
 const csvWriter = createCsvWriter({
     path: csvFilePath,
     header: [
@@ -37,10 +44,10 @@ app.post('/submit', (req, res) => {
         .catch(err => res.status(500).send('Error saving submission'));
 });
 
-// CSV download route (for you only, no frontend link)
+// CSV download route
 app.get('/download', (req, res) => {
     if (fs.existsSync(csvFilePath)) {
-        res.download(csvFilePath); // triggers direct download
+        res.download(csvFilePath);
     } else {
         res.status(404).send('No submissions yet!');
     }
